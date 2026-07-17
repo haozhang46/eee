@@ -19,6 +19,38 @@ export function getControlMcpClient(): BridgeClient | null {
   return null
 }
 
+type AuthorizePayload = {
+  decision?: string
+  requestId?: string
+  reason?: string
+  message?: string
+}
+
+/** Unwrap Control MCP CallToolResult `{ content: [{ type: 'text', text: JSON }] }`. */
+export function parseMcpToolResult(raw: unknown): unknown {
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    'content' in raw &&
+    Array.isArray((raw as { content: unknown }).content)
+  ) {
+    const first = (raw as { content: unknown[] }).content[0]
+    if (
+      first &&
+      typeof first === 'object' &&
+      (first as { type?: string }).type === 'text' &&
+      typeof (first as { text?: string }).text === 'string'
+    ) {
+      try {
+        return JSON.parse((first as { text: string }).text)
+      } catch {
+        return raw
+      }
+    }
+  }
+  return raw
+}
+
 export async function authorizeViaMcp(
   client: BridgeClient,
   req: { toolName: string; input: Record<string, unknown>; sessionId: string },
@@ -29,12 +61,7 @@ export async function authorizeViaMcp(
   } catch {
     return { behavior: 'deny', message: 'control unreachable' }
   }
-  const r = raw as {
-    decision?: string
-    requestId?: string
-    reason?: string
-    message?: string
-  }
+  const r = parseMcpToolResult(raw) as AuthorizePayload
   if (
     !r ||
     (r.decision !== 'allow' &&
@@ -48,10 +75,12 @@ export async function authorizeViaMcp(
     return { behavior: 'deny', message: r.reason }
   }
   try {
-    const waited = (await client.callTool('onion.wait_resolve', {
-      requestId: r.requestId,
-      timeoutMs: 60_000,
-    })) as { decision?: string; reason?: string }
+    const waited = parseMcpToolResult(
+      await client.callTool('onion.wait_resolve', {
+        requestId: r.requestId,
+        timeoutMs: 60_000,
+      }),
+    ) as { decision?: string; reason?: string }
     if (waited?.decision === 'allow') return { behavior: 'allow' }
     return { behavior: 'deny', message: waited?.reason ?? 'denied by user' }
   } catch {

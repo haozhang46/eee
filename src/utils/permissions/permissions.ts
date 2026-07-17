@@ -510,7 +510,14 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         },
       }
     }
-    // allow → fall through to native checks
+    return {
+      behavior: 'allow',
+      updatedInput: input,
+      decisionReason: {
+        type: 'other',
+        reason: 'allowed by harness onion',
+      },
+    }
   }
 
   const result = await hasPermissionsToUseToolInner(tool, input, context)

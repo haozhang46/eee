@@ -53,6 +53,18 @@ describe('authorizeViaMcp', () => {
     expect(result).toEqual({ behavior: 'allow' })
   })
 
+  test('MCP content envelope allow → allow', async () => {
+    const client = mockClient({
+      'onion.authorize': async () => ({
+        content: [{ type: 'text', text: '{"decision":"allow"}' }],
+      }),
+    })
+
+    const result = await authorizeViaMcp(client, baseReq)
+
+    expect(result).toEqual({ behavior: 'allow' })
+  })
+
   test('needs_confirm then wait allow → allow', async () => {
     const client = mockClient({
       'onion.authorize': async () => ({

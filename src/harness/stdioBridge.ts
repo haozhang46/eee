@@ -30,6 +30,25 @@ function writeEvent(event: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify(event)}\n`)
 }
 
+/**
+ * Every turn must end with a terminal JSONL event (`error` or `done`) so
+ * Control CcbSlot can settle. Abort mid-fetch throws; we still emit `error`.
+ */
+export function turnFailureTerminalEvents(
+  turnId: string,
+  aborted: boolean,
+  err: unknown,
+): Array<Record<string, unknown>> {
+  if (aborted) {
+    return [{ type: 'error', message: 'Turn aborted', id: turnId }]
+  }
+  const message = err instanceof Error ? err.message : String(err)
+  return [
+    { type: 'error', message, id: turnId },
+    { type: 'done', messageId: crypto.randomUUID(), id: turnId },
+  ]
+}
+
 export async function runStdioBridgeMain(): Promise<void> {
   process.env.HARNESS_ONION_MCP = '1'
   process.env.HARNESS_CONTROL_MCP = 'stdio'
@@ -73,14 +92,8 @@ export async function runStdioBridgeMain(): Promise<void> {
         writeEvent({ ...ev, id: turn.id })
       }
     } catch (e: unknown) {
-      if (!ac.signal.aborted) {
-        const message = e instanceof Error ? e.message : String(e)
-        writeEvent({ type: 'error', message, id: turn.id })
-        writeEvent({
-          type: 'done',
-          messageId: crypto.randomUUID(),
-          id: turn.id,
-        })
+      for (const ev of turnFailureTerminalEvents(turn.id, ac.signal.aborted, e)) {
+        writeEvent(ev)
       }
     } finally {
       abortById.delete(turn.id)

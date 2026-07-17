@@ -136,6 +136,27 @@ function zSchema(s: { shape?: Record<string, unknown> }): {
   }
 }
 
+/** Wire inbound turn AbortSignal into tool ctx.abortController. */
+export function linkAbortSignal(
+  signal: AbortSignal,
+  controller: AbortController,
+): void {
+  if (signal.aborted) {
+    controller.abort()
+    return
+  }
+  signal.addEventListener('abort', () => controller.abort(), { once: true })
+}
+
+function isAbortError(e: unknown): boolean {
+  return (
+    (e instanceof Error && e.name === 'AbortError') ||
+    (typeof DOMException !== 'undefined' &&
+      e instanceof DOMException &&
+      e.name === 'AbortError')
+  )
+}
+
 export async function* runCCBAgent(
   messages: Array<{ role: string; content: string }>,
   workspaceRoot: string,
@@ -179,6 +200,9 @@ export async function* runCCBAgent(
   // getTools includes WebSearch and other builtin tools.
   const ccbTools = getTools(pc as never)
 
+  const abortController = new AbortController()
+  linkAbortSignal(signal, abortController)
+
   const ctx = {
     options: {
       commands: [],
@@ -192,7 +216,7 @@ export async function* runCCBAgent(
       isNonInteractiveSession: false,
       agentDefinitions: { agents: [], commands: [], skills: [] },
     },
-    abortController: new AbortController(),
+    abortController,
     readFileState: new FileStateCache(1000, 10 * 1024 * 1024),
     getAppState: () => ({ toolPermissionContext: pc }),
     setAppState: () => {},
@@ -211,27 +235,39 @@ export async function* runCCBAgent(
   }))
 
   for (let round = 0; round < 5; round++) {
-    if (signal.aborted) break
+    if (signal.aborted) {
+      yield { type: 'error', message: 'Turn aborted' }
+      return
+    }
     let responseText = ''
     const tcIndex = new Map<
       number,
       { id: string; name: string; args: string }
     >()
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${llm.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: llm.model,
-        messages: apiMessages,
-        tools: functions,
-        stream: true,
-      }),
-      signal,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${llm.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: llm.model,
+          messages: apiMessages,
+          tools: functions,
+          stream: true,
+        }),
+        signal,
+      })
+    } catch (e: unknown) {
+      if (signal.aborted || isAbortError(e)) {
+        yield { type: 'error', message: 'Turn aborted' }
+        return
+      }
+      throw e
+    }
     if (!response.ok) {
       yield { type: 'error', message: `API ${response.status}` }
       return
@@ -244,52 +280,60 @@ export async function* runCCBAgent(
     const decoder = new TextDecoder()
     let buf = ''
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const data = line.slice(6)
-        if (data === '[DONE]') continue
-        try {
-          const json = JSON.parse(data) as {
-            choices?: Array<{
-              delta?: {
-                content?: string
-                tool_calls?: Array<{
-                  index?: number
-                  id?: string
-                  function?: { name?: string; arguments?: string }
-                }>
-              }
-            }>
-          }
-          const delta = json.choices?.[0]?.delta
-          if (delta?.content) {
-            responseText += delta.content
-            yield { type: 'text-delta', content: delta.content }
-          }
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index ?? 0
-              const ex = tcIndex.get(idx) ?? {
-                id: tc.id ?? crypto.randomUUID(),
-                name: '',
-                args: '',
-              }
-              if (tc.id) ex.id = tc.id
-              if (tc.function?.name) ex.name = tc.function.name
-              if (tc.function?.arguments) ex.args += tc.function.arguments
-              tcIndex.set(idx, ex)
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6)
+          if (data === '[DONE]') continue
+          try {
+            const json = JSON.parse(data) as {
+              choices?: Array<{
+                delta?: {
+                  content?: string
+                  tool_calls?: Array<{
+                    index?: number
+                    id?: string
+                    function?: { name?: string; arguments?: string }
+                  }>
+                }
+              }>
             }
+            const delta = json.choices?.[0]?.delta
+            if (delta?.content) {
+              responseText += delta.content
+              yield { type: 'text-delta', content: delta.content }
+            }
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0
+                const ex = tcIndex.get(idx) ?? {
+                  id: tc.id ?? crypto.randomUUID(),
+                  name: '',
+                  args: '',
+                }
+                if (tc.id) ex.id = tc.id
+                if (tc.function?.name) ex.name = tc.function.name
+                if (tc.function?.arguments) ex.args += tc.function.arguments
+                tcIndex.set(idx, ex)
+              }
+            }
+          } catch {
+            // ignore malformed SSE chunks
           }
-        } catch {
-          // ignore malformed SSE chunks
         }
       }
+    } catch (e: unknown) {
+      if (signal.aborted || isAbortError(e)) {
+        yield { type: 'error', message: 'Turn aborted' }
+        return
+      }
+      throw e
     }
 
     if (tcIndex.size === 0) {
@@ -304,7 +348,10 @@ export async function* runCCBAgent(
     }
     apiMessages.push(assistantMsg)
     for (const [, tc] of tcIndex) {
-      if (signal.aborted) break
+      if (signal.aborted) {
+        yield { type: 'error', message: 'Turn aborted' }
+        return
+      }
       let args: Record<string, unknown> = {}
       try {
         args = JSON.parse(tc.args) as Record<string, unknown>
@@ -340,6 +387,10 @@ export async function* runCCBAgent(
           )
           result = typeof r === 'string' ? r : JSON.stringify(r)
         } catch (e: unknown) {
+          if (signal.aborted || isAbortError(e)) {
+            yield { type: 'error', message: 'Turn aborted' }
+            return
+          }
           const msg = e instanceof Error ? e.message : String(e)
           result = `Tool error: ${msg}`
         }
@@ -371,5 +422,9 @@ export async function* runCCBAgent(
     }
   }
 
+  if (signal.aborted) {
+    yield { type: 'error', message: 'Turn aborted' }
+    return
+  }
   yield { type: 'done', messageId: crypto.randomUUID() }
 }

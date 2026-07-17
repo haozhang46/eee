@@ -6,6 +6,7 @@
  */
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { formatToolResult } from './formatToolResult.js'
 
 /** Minimal SlotEvent shapes compatible with @harness/slot (duplicated on purpose). */
 export interface ToolCallEvent {
@@ -385,7 +386,7 @@ export async function* runCCBAgent(
             hasPermissionsToUseTool as never,
             {} as never,
           )
-          result = typeof r === 'string' ? r : JSON.stringify(r)
+          result = formatToolResult(ccbTool, r, tc.id)
         } catch (e: unknown) {
           if (signal.aborted || isAbortError(e)) {
             yield { type: 'error', message: 'Turn aborted' }
@@ -404,7 +405,7 @@ export async function* runCCBAgent(
           id: tc.id,
           toolName: tc.name,
           input: args,
-          output: result.slice(0, 500),
+          output: result.slice(0, 4000),
           status: 'complete',
         },
       }

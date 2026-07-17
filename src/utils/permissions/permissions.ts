@@ -65,11 +65,16 @@ const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
 
 import {
   addToTurnClassifierDuration,
+  getSessionId,
   getTotalCacheCreationInputTokens,
   getTotalCacheReadInputTokens,
   getTotalInputTokens,
   getTotalOutputTokens,
 } from '../../bootstrap/state.js'
+import {
+  authorizeViaMcp,
+  getControlMcpClient,
+} from '../../harness/mcpOnionBridge.js'
 import { getFeatureValue_CACHED_WITH_REFRESH } from '../../services/analytics/growthbook.js'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -477,6 +482,37 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
   assistantMessage,
   toolUseID,
 ): Promise<PermissionDecision> => {
+  // harness control onion (fail-closed)
+  const harnessClient = getControlMcpClient()
+  if (process.env.HARNESS_ONION_MCP === '1') {
+    if (!harnessClient) {
+      return {
+        behavior: 'deny',
+        message: 'Harness Control MCP not configured',
+        decisionReason: {
+          type: 'other',
+          reason: 'control unreachable',
+        },
+      }
+    }
+    const bridge = await authorizeViaMcp(harnessClient, {
+      toolName: tool.name,
+      input: input as Record<string, unknown>,
+      sessionId: getSessionId(),
+    })
+    if (bridge.behavior === 'deny') {
+      return {
+        behavior: 'deny',
+        message: bridge.message ?? 'denied by onion',
+        decisionReason: {
+          type: 'other',
+          reason: bridge.message ?? 'denied by onion',
+        },
+      }
+    }
+    // allow → fall through to native checks
+  }
+
   const result = await hasPermissionsToUseToolInner(tool, input, context)
 
   // Reset consecutive denials on any allowed tool use in auto mode.

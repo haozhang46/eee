@@ -26,7 +26,12 @@ import {
 const inputSchema = lazySchema(() =>
   z.strictObject({
     url: z.string().url().describe('The URL to fetch content from'),
-    prompt: z.string().describe('The prompt to run on the fetched content'),
+    prompt: z
+      .string()
+      .optional()
+      .describe(
+        'Optional: what to extract from the page. If omitted, returns the page markdown directly.',
+      ),
   }),
 )
 type InputSchema = ReturnType<typeof inputSchema>
@@ -330,9 +335,10 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
 
     let result: string
     if (
-      isPreapproved &&
-      contentType.includes('text/markdown') &&
-      content.length < MAX_MARKDOWN_LENGTH
+      !prompt?.trim() ||
+      (isPreapproved &&
+        contentType.includes('text/markdown') &&
+        content.length < MAX_MARKDOWN_LENGTH)
     ) {
       result = content
     } else {

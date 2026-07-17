@@ -1,18 +1,18 @@
 export const WEB_FETCH_TOOL_NAME = 'WebFetch'
 
 export const DESCRIPTION = `
-- Fetches content from a specified URL and processes it using an AI model
-- Takes a URL and a prompt as input
+- Fetches content from a specified URL and optionally processes it using an AI model
+- Takes a URL and an optional prompt as input
 - Fetches the URL content, converts HTML to markdown
-- Processes the content with the prompt using a small, fast model
-- Returns the model's response about the content
+- If a prompt is provided, processes the content with the prompt using a small, fast model
+- If prompt is omitted, returns the fetched markdown directly
 - Use this tool when you need to retrieve and analyze web content
 
 Usage notes:
   - IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.
   - The URL must be a fully-formed valid URL
   - HTTP URLs will be automatically upgraded to HTTPS
-  - The prompt should describe what information you want to extract from the page
+  - The prompt (optional) should describe what information you want to extract from the page
   - This tool is read-only and does not modify any files
   - Results may be summarized if the content is very large
   - Includes a self-cleaning 15-minute cache for faster responses when repeatedly accessing the same URL

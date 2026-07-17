@@ -33,12 +33,15 @@ const inputSchema = lazySchema(() =>
       .describe(
         "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling (default: 'fallback')",
       ),
-    search_type: z
-      .enum(['auto', 'fast', 'deep'])
-      .optional()
-      .describe(
-        "Search type - 'auto': balanced search (default), 'fast': quick results, 'deep': comprehensive search",
-      ),
+    search_type: z.preprocess(
+      value =>
+        value === 'auto' || value === 'fast' || value === 'deep'
+          ? value
+          : undefined,
+      z.enum(['auto', 'fast', 'deep']).optional(),
+    ).describe(
+      "Search type - 'auto': balanced search (default), 'fast': quick results, 'deep': comprehensive search. Omit if unsure.",
+    ),
     context_max_characters: z
       .number()
       .optional()

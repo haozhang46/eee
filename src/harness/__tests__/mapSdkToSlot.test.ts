@@ -68,59 +68,33 @@ describe('createSdkToSlotMapper', () => {
       },
       { type: 'tool-result', toolCallId: 't1', output: 'ok' },
     ])
-
-    const errMapper = createSdkToSlotMapper()
-    errMapper.map({
-      type: 'stream_event',
-      event: {
-        type: 'content_block_start',
-        content_block: {
-          type: 'tool_use',
-          id: 't2',
-          name: 'WebFetch',
-          input: {},
-        },
-      },
-    })
-    const failed = errMapper.map({
-      type: 'user',
-      message: {
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 't2',
-            content: 'bad',
-            is_error: true,
-          },
-        ],
-      },
-    })
-    expect(failed[0]).toMatchObject({
-      type: 'tool-call',
-      toolCall: { id: 't2', status: 'error', output: 'bad' },
-    })
   })
 
-  test('skips duplicate tool_use and subagent streams', () => {
+  test('does not forward subagent events — CCB owns that layer', () => {
     const mapper = createSdkToSlotMapper()
-    const start = {
-      type: 'stream_event',
-      event: {
-        type: 'content_block_start',
-        content_block: {
-          type: 'tool_use',
-          id: 't1',
-          name: 'Bash',
-          input: {},
-        },
-      },
-    }
-    expect(mapper.map(start)).toHaveLength(1)
-    expect(mapper.map(start)).toEqual([])
     expect(
       mapper.map({
-        ...start,
-        parent_tool_use_id: 'parent',
+        type: 'stream_event',
+        parent_tool_use_id: 'agent-1',
+        event: {
+          type: 'content_block_start',
+          content_block: {
+            type: 'tool_use',
+            id: 'child-1',
+            name: 'Bash',
+            input: { command: 'ls' },
+          },
+        },
+      }),
+    ).toEqual([])
+    expect(
+      mapper.map({
+        type: 'stream_event',
+        parent_tool_use_id: 'agent-1',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'internal' },
+        },
       }),
     ).toEqual([])
   })

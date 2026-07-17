@@ -1,6 +1,10 @@
 /**
  * Map QueryEngine SDKMessages → SlotEvent shapes for harness Chat SSE.
  * Slot / stdio stay loop-free; this is pure projection.
+ *
+ * Subagent work stays inside CCB (QueryEngine / Agent tool). Events with
+ * `parent_tool_use_id` are not forwarded — the outer Slot/Web only sees
+ * top-level tools (including the Agent tool itself).
  */
 
 export interface ToolCallEvent {
@@ -36,6 +40,11 @@ type SdkLike = {
   }
 }
 
+type ToolMeta = {
+  toolName: string
+  input: Record<string, unknown>
+}
+
 function stringifyContent(content: unknown): string {
   if (content == null) return ''
   if (typeof content === 'string') return content
@@ -56,13 +65,37 @@ function stringifyContent(content: unknown): string {
   return String(content)
 }
 
+function isSubagent(msg: SdkLike): boolean {
+  const p = msg.parent_tool_use_id
+  return p != null && p !== ''
+}
+
+function toolCallEvent(
+  id: string,
+  toolName: string,
+  input: Record<string, unknown>,
+  status: ToolCallEvent['status'],
+  output?: string,
+): SlotEvent {
+  return {
+    type: 'tool-call',
+    toolCall: {
+      id,
+      toolName,
+      input,
+      status,
+      ...(output !== undefined ? { output } : {}),
+    },
+  }
+}
+
 /**
  * Stateful mapper: tracks tool ids so results can complete prior tool-call events.
  */
 export function createSdkToSlotMapper(): {
   map(msg: unknown): SlotEvent[]
 } {
-  const toolMeta = new Map<string, { toolName: string; input: Record<string, unknown> }>()
+  const toolMeta = new Map<string, ToolMeta>()
   let streamedText = false
 
   return {
@@ -70,10 +103,8 @@ export function createSdkToSlotMapper(): {
       const m = msg as SdkLike
       if (!m?.type) return []
 
-      // Subagent streams — skip for Slot UI (main turn only)
-      if (m.parent_tool_use_id != null && m.parent_tool_use_id !== '') {
-        return []
-      }
+      // Subagent traffic stays in CCB — outer Slot does not handle it.
+      if (isSubagent(m)) return []
 
       if (m.type === 'stream_event' && m.event) {
         const ev = m.event
@@ -96,17 +127,7 @@ export function createSdkToSlotMapper(): {
             const toolName = String(block.name ?? 'unknown')
             const input = (block.input as Record<string, unknown>) ?? {}
             toolMeta.set(id, { toolName, input })
-            return [
-              {
-                type: 'tool-call',
-                toolCall: {
-                  id,
-                  toolName,
-                  input,
-                  status: 'running',
-                },
-              },
-            ]
+            return [toolCallEvent(id, toolName, input, 'running')]
           }
         }
         return []
@@ -129,30 +150,8 @@ export function createSdkToSlotMapper(): {
             if (!id) continue
             const toolName = String(block.name ?? 'unknown')
             const input = (block.input as Record<string, unknown>) ?? {}
-            const existing = toolMeta.get(id)
             toolMeta.set(id, { toolName, input })
-            if (existing) {
-              // Stream start often has empty input; assistant carries full args.
-              out.push({
-                type: 'tool-call',
-                toolCall: {
-                  id,
-                  toolName,
-                  input,
-                  status: 'running',
-                },
-              })
-              continue
-            }
-            out.push({
-              type: 'tool-call',
-              toolCall: {
-                id,
-                toolName,
-                input,
-                status: 'running',
-              },
-            })
+            out.push(toolCallEvent(id, toolName, input, 'running'))
           }
         }
         return out
@@ -169,16 +168,15 @@ export function createSdkToSlotMapper(): {
           const meta = toolMeta.get(toolCallId)
           const output = stringifyContent(block.content).slice(0, 4000)
           const isError = block.is_error === true
-          out.push({
-            type: 'tool-call',
-            toolCall: {
-              id: toolCallId,
-              toolName: meta?.toolName ?? 'tool',
-              input: meta?.input ?? {},
+          out.push(
+            toolCallEvent(
+              toolCallId,
+              meta?.toolName ?? 'tool',
+              meta?.input ?? {},
+              isError ? 'error' : 'complete',
               output,
-              status: isError ? 'error' : 'complete',
-            },
-          })
+            ),
+          )
           out.push({ type: 'tool-result', toolCallId, output })
         }
         return out

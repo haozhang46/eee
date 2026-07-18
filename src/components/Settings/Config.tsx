@@ -36,6 +36,8 @@ import { isBridgeEnabled } from '../../bridge/bridgeEnabled.js';
 import { ThemePicker } from '../ThemePicker.js';
 import { useAppState, useSetAppState, useAppStateStore } from '../../state/AppState.js';
 import { ModelPicker } from '../ModelPicker.js';
+import { EndpointPicker } from './EndpointPicker.js';
+import { endpointDisplayValue } from './endpointDisplay.js';
 import { modelDisplayString, isOpus1mMergeEnabled } from '../../utils/model/model.js';
 import { isBilledAsExtraUsage } from '../../utils/extraUsage.js';
 import { ClaudeMdExternalIncludesDialog } from '../ClaudeMdExternalIncludesDialog.js';
@@ -122,6 +124,7 @@ type Setting =
 type SubMenu =
   | 'Theme'
   | 'Model'
+  | 'Endpoint'
   | 'TeammateModel'
   | 'ExternalIncludes'
   | 'OutputStyle'
@@ -893,6 +896,13 @@ export function Config({
       type: 'managedEnum' as const,
       onChange: onChangeMainModelConfig,
     },
+    {
+      id: 'endpoint',
+      label: 'Endpoint',
+      value: endpointDisplayValue(settingsData?.endpointMode),
+      type: 'managedEnum' as const,
+      onChange: () => {}, // submenu handles apply
+    },
     ...(isConnectedToIde
       ? [
           {
@@ -1454,6 +1464,7 @@ export function Config({
     if (
       setting.id === 'theme' ||
       setting.id === 'model' ||
+      setting.id === 'endpoint' ||
       setting.id === 'teammateDefaultModel' ||
       setting.id === 'showExternalIncludesDialog' ||
       setting.id === 'outputStyle' ||
@@ -1468,6 +1479,10 @@ export function Config({
           return;
         case 'model':
           setShowSubmenu('Model');
+          setTabsHidden(true);
+          return;
+        case 'endpoint':
+          setShowSubmenu('Endpoint');
           setTabsHidden(true);
           return;
         case 'teammateDefaultModel':
@@ -1677,6 +1692,37 @@ export function Config({
                 ? isFastMode && isFastModeSupportedByModel(mainLoopModel) && isFastModeAvailable()
                 : false
             }
+          />
+          <Text dimColor>
+            <Byline>
+              <KeyboardShortcutHint shortcut="Enter" action="confirm" />
+              <ConfigurableShortcutHint
+                action="confirm:no"
+                context="Confirmation"
+                fallback="Esc"
+                description="cancel"
+              />
+            </Byline>
+          </Text>
+        </>
+      ) : showSubmenu === 'Endpoint' ? (
+        <>
+          <EndpointPicker
+            onDone={message => {
+              isDirty.current = true;
+              const next = getInitialSettings();
+              setSettingsData(next);
+              setChanges(prev => ({
+                ...prev,
+                endpoint: message,
+              }));
+              setShowSubmenu(null);
+              setTabsHidden(false);
+            }}
+            onCancel={() => {
+              setShowSubmenu(null);
+              setTabsHidden(false);
+            }}
           />
           <Text dimColor>
             <Byline>

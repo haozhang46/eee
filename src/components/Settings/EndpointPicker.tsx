@@ -1,6 +1,6 @@
 import { Box, Text } from '@anthropic/ink';
 import * as React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useKeybinding } from '../../keybindings/useKeybinding.js';
 import { clearOpenAIClientCache } from '../../services/api/openai/client.js';
 import {
@@ -51,6 +51,10 @@ function clearedOpenAiEnv(snapshotEnv?: Record<string, string>): Record<string, 
   return { ...cleared, ...snapshotEnv };
 }
 
+function isOllamaEndpointMode(mode: SettingsJson['endpointMode']): boolean {
+  return mode === 'ollama-local' || mode === 'ollama-remote';
+}
+
 export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React.ReactNode {
   const userSettings = getSettingsForSource('userSettings');
   const [flow, setFlow] = useState<FlowState>('choose');
@@ -63,6 +67,8 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
   const [models, setModels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Bumped on cancel / new fetch so late tags responses cannot change flow.
+  const fetchGenerationRef = useRef(0);
 
   const handleBackOrCancel = useCallback(() => {
     if (flow === 'choose') {
@@ -77,6 +83,9 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
       return;
     }
     if (flow === 'loading_models' || flow === 'pick_model') {
+      if (flow === 'loading_models') {
+        fetchGenerationRef.current += 1;
+      }
       if (pendingMode === 'ollama-remote') {
         setFlow('remote_key');
       } else {
@@ -98,7 +107,13 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
     const snapshot = userSettings?.cloudEndpointSnapshot;
     const result = buildCloudRestorePatch(snapshot);
     if (!result.ok) {
-      onDone('No cloud endpoint saved. Run /login first to configure a cloud provider.');
+      // Spec: already cloud + no snapshot → silent no-op (do not mark Config dirty).
+      // On Ollama without snapshot → message via onDone (still no settings write).
+      if (isOllamaEndpointMode(userSettings?.endpointMode)) {
+        onDone('No cloud endpoint saved. Run /login first to configure a cloud provider.');
+      } else {
+        onCancel();
+      }
       return;
     }
 
@@ -118,7 +133,7 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
     applyOpenAiEnvToProcess(env);
     clearOpenAIClientCache();
     onDone('Switched to Cloud');
-  }, [onDone, userSettings?.cloudEndpointSnapshot]);
+  }, [onCancel, onDone, userSettings?.cloudEndpointSnapshot, userSettings?.endpointMode]);
 
   const applyOllama = useCallback(
     (modelName: string) => {
@@ -162,6 +177,7 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
 
   const startModelFetch = useCallback(
     async (mode: 'ollama-local' | 'ollama-remote', origin: string, apiKey?: string) => {
+      const generation = ++fetchGenerationRef.current;
       setPendingMode(mode);
       setRemoteOrigin(origin);
       setFlow('loading_models');
@@ -172,6 +188,7 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
         const names = await fetchOllamaModelNames(origin, {
           apiKey: apiKey?.trim() || undefined,
         });
+        if (generation !== fetchGenerationRef.current) return;
         if (names.length === 0) {
           setError('No models found. Run `ollama pull <model>` first, then try again.');
           setStatus(null);
@@ -182,6 +199,7 @@ export function EndpointPicker({ onDone, onCancel }: EndpointPickerProps): React
         setStatus(null);
         setFlow('pick_model');
       } catch (e) {
+        if (generation !== fetchGenerationRef.current) return;
         setError(e instanceof Error ? e.message : String(e));
         setStatus(null);
         setFlow(mode === 'ollama-remote' ? 'remote_url' : 'choose');

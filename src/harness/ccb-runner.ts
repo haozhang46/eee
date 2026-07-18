@@ -55,12 +55,27 @@ export function linkAbortSignal(
   signal.addEventListener('abort', () => controller.abort(), { once: true })
 }
 
-function applyLlmEnv(llm: LLMSettings): void {
+async function applyLlmEnv(llm: LLMSettings): Promise<void> {
+  // Clear OpenAI-compat flags first so Cloud↔Ollama switches don't leak.
+  delete process.env.CLAUDE_CODE_USE_OPENAI
+  delete process.env.OPENAI_MODEL
+  delete process.env.OPENAI_BASE_URL
+  delete process.env.OPENAI_API_KEY
+
   if (llm.provider === 'openai') {
     process.env.CLAUDE_CODE_USE_OPENAI = '1'
     process.env.OPENAI_MODEL = llm.model
     process.env.OPENAI_BASE_URL = llm.baseUrl
     process.env.OPENAI_API_KEY = llm.apiKey
+  }
+
+  try {
+    const { clearOpenAIClientCache } = await import(
+      '../services/api/openai/client.js'
+    )
+    clearOpenAIClientCache()
+  } catch {
+    // best-effort
   }
 }
 
@@ -78,7 +93,7 @@ export async function* runCCBAgent(
     yield { type: 'done', messageId: crypto.randomUUID() }
     return
   }
-  applyLlmEnv(llm)
+  await applyLlmEnv(llm)
 
   const [
     { enableConfigs },

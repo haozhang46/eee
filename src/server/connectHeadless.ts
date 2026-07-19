@@ -40,6 +40,7 @@ function sendErrorResponse(
   requestId: string,
   error: string,
 ): void {
+  if (ws.readyState !== WS_OPEN) return
   ws.send(
     jsonStringify({
       type: 'control_response',
@@ -61,6 +62,7 @@ function sendPermissionResponse(
   requestId: string,
   result: { behavior: 'allow'; updatedInput?: Record<string, unknown> },
 ): void {
+  if (ws.readyState !== WS_OPEN) return
   ws.send(
     jsonStringify({
       type: 'control_response',
@@ -97,6 +99,12 @@ export async function runConnectHeadless(
     throw new ConnectHeadlessError('Missing WebSocket URL in connection config')
   }
 
+  if (interactive && prompt) {
+    throw new ConnectHeadlessError(
+      'Cannot provide a prompt argument in interactive mode',
+    )
+  }
+
   const headers: Record<string, string> = {}
   if (connectConfig.authToken) {
     headers['authorization'] = `Bearer ${connectConfig.authToken}`
@@ -116,11 +124,14 @@ export async function runConnectHeadless(
 
     function scheduleIdleTimeout(): void {
       clearIdleTimeout()
-      // If no messages arrive within 1 second, assume idle and resolve.
+      // Safety net: if no protocol messages arrive for 30s after the last
+      // activity, resolve the promise. This prevents hangs in headless mode
+      // when the remote server disconnects without sending a close frame or
+      // a final result/error message. Resets on every received message.
       idleTimer = setTimeout(() => {
         logForDebugging('[ConnectHeadless] Idle timeout — no messages received')
         finish()
-      }, 1_000)
+      }, 30_000)
     }
 
     function clearIdleTimeout(): void {
@@ -219,7 +230,11 @@ export async function runConnectHeadless(
         if (
           msg.type === 'control_response' ||
           msg.type === 'keep_alive' ||
-          msg.type === 'control_cancel_request'
+          msg.type === 'control_cancel_request' ||
+          msg.type === 'streamlined_text' ||
+          msg.type === 'streamlined_tool_use_summary' ||
+          (msg.type === 'system' &&
+            (msg as Record<string, unknown>).subtype === 'post_turn_summary')
         ) {
           continue
         }

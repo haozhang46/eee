@@ -10,6 +10,7 @@ describe('runConnectHeadless', () => {
     // Mock WebSocket constructor
     const origWebSocket = globalThis.WebSocket
     globalThis.WebSocket = class MockWebSocket {
+      static OPEN = 1
       readyState = WebSocket.OPEN
       send = wsSend
       close = wsClose
@@ -63,6 +64,12 @@ describe('runConnectHeadless', () => {
     expect(sentMsg.message.role).toBe('user')
     expect(sentMsg.message.content).toBe('Hello')
 
+    // Trigger close event to resolve the promise
+    const closeHandler = wsAddEventListener.mock.calls.find(
+      c => c[0] === 'close',
+    )?.[1]
+    if (closeHandler) closeHandler()
+
     // Cleanup
     await promise
     globalThis.WebSocket = origWebSocket
@@ -79,6 +86,7 @@ describe('runConnectHeadless', () => {
     const origWs = globalThis.WebSocket
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
+      static OPEN = 1
       readyState = WebSocket.OPEN
       send = mock()
       close = mock()
@@ -141,6 +149,7 @@ describe('runConnectHeadless', () => {
     const wsSend = mock()
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
+      static OPEN = 1
       readyState = WebSocket.OPEN
       send = wsSend
       close = mock()
@@ -183,6 +192,9 @@ describe('runConnectHeadless', () => {
     })
     expect(errorResponse).toBeDefined()
 
+    // Trigger close event to resolve the promise
+    wsHandlers.get('close')?.()
+
     globalThis.WebSocket = origWs
     await promise.catch(() => {})
   })
@@ -192,6 +204,7 @@ describe('runConnectHeadless', () => {
     const wsSend = mock()
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
+      static OPEN = 1
       readyState = WebSocket.OPEN
       send = wsSend
       close = mock()
@@ -240,6 +253,9 @@ describe('runConnectHeadless', () => {
       )
     })
     expect(allowResponse).toBeDefined()
+
+    // Trigger close event to resolve the promise
+    wsHandlers.get('close')?.()
 
     globalThis.WebSocket = origWs
     await promise.catch(() => {})

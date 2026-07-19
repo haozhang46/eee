@@ -18,7 +18,8 @@ describe('fetchOllamaModelNames', () => {
   test('throws on non-OK', async () => {
     await expect(
       fetchOllamaModelNames('http://127.0.0.1:11434', {
-        fetch: (async () => new Response('nope', { status: 500 })) as typeof fetch,
+        fetch: (async () =>
+          new Response('nope', { status: 500 })) as typeof fetch,
       }),
     ).rejects.toThrow(/500|Ollama|tags/i)
   })

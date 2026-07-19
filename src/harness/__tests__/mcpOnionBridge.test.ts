@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  authorizeViaMcp,
-  type BridgeClient,
-} from '../mcpOnionBridge.js'
+import { authorizeViaMcp, type BridgeClient } from '../mcpOnionBridge.js'
 
 function mockClient(
   handlers: Record<
@@ -71,7 +68,7 @@ describe('authorizeViaMcp', () => {
         decision: 'needs_confirm',
         requestId: 'req-42',
       }),
-      'onion.wait_resolve': async (args) => {
+      'onion.wait_resolve': async args => {
         expect(args).toEqual({ requestId: 'req-42', timeoutMs: 60_000 })
         return { decision: 'allow' }
       },

@@ -19,9 +19,7 @@ export type { SlotEvent, ToolCallEvent }
 /** CLI calls this via startBackgroundHousekeeping; harness ask() path must too. */
 let extractMemoriesInited = false
 
-async function ensureExtractMemoriesInit(
-  workspaceRoot: string,
-): Promise<void> {
+async function ensureExtractMemoriesInit(workspaceRoot: string): Promise<void> {
   if (feature('EXTRACT_MEMORIES')) {
     if (extractMemoriesInited) return
     extractMemoriesInited = true
@@ -166,9 +164,7 @@ export async function* runCCBAgent(
     import('../utils/permissions/permissions.js'),
     import('../QueryEngine.js'),
     import('../commands.js'),
-    import(
-      '@claude-code-best/builtin-tools/tools/AgentTool/loadAgentsDir.js'
-    ),
+    import('@claude-code-best/builtin-tools/tools/AgentTool/loadAgentsDir.js'),
     import('../state/AppStateStore.js'),
     import('../bootstrap/state.js'),
     import('../utils/messages.js'),

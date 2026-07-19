@@ -92,7 +92,11 @@ export async function runStdioBridgeMain(): Promise<void> {
         writeEvent({ ...ev, id: turn.id })
       }
     } catch (e: unknown) {
-      for (const ev of turnFailureTerminalEvents(turn.id, ac.signal.aborted, e)) {
+      for (const ev of turnFailureTerminalEvents(
+        turn.id,
+        ac.signal.aborted,
+        e,
+      )) {
         writeEvent(ev)
       }
     } finally {

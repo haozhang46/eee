@@ -4,7 +4,11 @@ import { turnFailureTerminalEvents } from '../stdioBridge.js'
 
 describe('turnFailureTerminalEvents', () => {
   test('aborted turn emits terminal error with turn id', () => {
-    const events = turnFailureTerminalEvents('turn-1', true, new Error('AbortError'))
+    const events = turnFailureTerminalEvents(
+      'turn-1',
+      true,
+      new Error('AbortError'),
+    )
     expect(events).toEqual([
       { type: 'error', message: 'Turn aborted', id: 'turn-1' },
     ])
@@ -14,7 +18,9 @@ describe('turnFailureTerminalEvents', () => {
     const events = turnFailureTerminalEvents('turn-2', false, new Error('boom'))
     expect(events[0]).toEqual({ type: 'error', message: 'boom', id: 'turn-2' })
     expect(events[1]).toMatchObject({ type: 'done', id: 'turn-2' })
-    expect(typeof (events[1] as { messageId?: string }).messageId).toBe('string')
+    expect(typeof (events[1] as { messageId?: string }).messageId).toBe(
+      'string',
+    )
   })
 })
 

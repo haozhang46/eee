@@ -375,10 +375,14 @@ export const SettingsSchema = lazySchema(() =>
       endpointMode: z
         .enum(['cloud', 'ollama-local', 'ollama-remote'])
         .optional()
-        .describe('Settings Endpoint mode: cloud provider vs local/remote Ollama'),
+        .describe(
+          'Settings Endpoint mode: cloud provider vs local/remote Ollama',
+        ),
       cloudEndpointSnapshot: z
         .object({
-          modelType: z.enum(['anthropic', 'openai', 'gemini', 'grok']).optional(),
+          modelType: z
+            .enum(['anthropic', 'openai', 'gemini', 'grok'])
+            .optional(),
           env: z.record(z.string(), z.string()).optional(),
         })
         .optional()
@@ -386,7 +390,9 @@ export const SettingsSchema = lazySchema(() =>
       ollamaRemoteBaseUrl: z
         .string()
         .optional()
-        .describe('Last remote Ollama origin (no /v1 required) for Settings form'),
+        .describe(
+          'Last remote Ollama origin (no /v1 required) for Settings form',
+        ),
       model: z
         .string()
         .optional()

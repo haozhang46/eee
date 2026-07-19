@@ -10,13 +10,15 @@ afterEach(() => {
 describe('createHttpControlClient', () => {
   test('http bridge posts authorize', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
-    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ url: String(input), init })
-      return new Response(JSON.stringify({ decision: 'allow' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }) as typeof fetch
+    globalThis.fetch = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response(JSON.stringify({ decision: 'allow' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    ) as typeof fetch
 
     const client = createHttpControlClient('http://127.0.0.1:3100')
     const result = await client.callTool('onion.authorize', {
@@ -43,13 +45,15 @@ describe('createHttpControlClient', () => {
 
   test('http bridge posts wait_resolve', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
-    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ url: String(input), init })
-      return new Response(JSON.stringify({ decision: 'allow' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }) as typeof fetch
+    globalThis.fetch = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response(JSON.stringify({ decision: 'allow' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    ) as typeof fetch
 
     const client = createHttpControlClient('http://127.0.0.1:3100/')
     const result = await client.callTool('onion.wait_resolve', {

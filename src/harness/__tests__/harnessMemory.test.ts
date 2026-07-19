@@ -19,7 +19,8 @@ describe('harnessMemory', () => {
       expect(memDir).toBe(harnessMemoryDir(root))
       expect(process.env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE).toBe(memDir)
     } finally {
-      if (prev === undefined) delete process.env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE
+      if (prev === undefined)
+        delete process.env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE
       else process.env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE = prev
     }
   })
@@ -63,7 +64,9 @@ describe('harnessMemory', () => {
     // idempotent include
     syncHarnessJsonToCcbMarkdown(memDir)
     const index2 = readFileSync(join(memDir, 'MEMORY.md'), 'utf-8')
-    expect(index2.match(new RegExp(HARNESS_JSON_BRIDGE_MD, 'g'))?.length).toBe(1)
+    expect(index2.match(new RegExp(HARNESS_JSON_BRIDGE_MD, 'g'))?.length).toBe(
+      1,
+    )
   })
 
   test('injectHarnessMemoriesIntoPrompt sets CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES', () => {

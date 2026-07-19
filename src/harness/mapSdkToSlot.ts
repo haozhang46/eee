@@ -160,7 +160,10 @@ export function createSdkToSlotMapper(): {
       if (m.type === 'user' && Array.isArray(m.message?.content)) {
         const out: SlotEvent[] = []
         for (const block of m.message!.content!) {
-          if (block.type !== 'tool_result' && block.type !== 'mcp_tool_result') {
+          if (
+            block.type !== 'tool_result' &&
+            block.type !== 'mcp_tool_result'
+          ) {
             continue
           }
           const toolCallId = String(block.tool_use_id ?? '')
@@ -193,7 +196,8 @@ export function createSdkToSlotMapper(): {
         return [
           {
             type: 'done',
-            messageId: typeof m.uuid === 'string' ? m.uuid : crypto.randomUUID(),
+            messageId:
+              typeof m.uuid === 'string' ? m.uuid : crypto.randomUUID(),
           },
         ]
       }

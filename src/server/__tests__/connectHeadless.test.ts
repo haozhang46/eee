@@ -14,7 +14,10 @@ describe('runConnectHeadless', () => {
       send = wsSend
       close = wsClose
       addEventListener = wsAddEventListener
-      constructor(public url: string | URL, public protocols?: string | string[]) {}
+      constructor(
+        public url: string | URL,
+        public protocols?: string | string[],
+      ) {}
     } as unknown as typeof WebSocket
 
     const config = {
@@ -28,16 +31,30 @@ describe('runConnectHeadless', () => {
     const promise = runConnectHeadless(config, 'Hello', 'json', false)
 
     // Simulate WebSocket open
-    const openHandler = wsAddEventListener.mock.calls.find(c => c[0] === 'open')?.[1]
+    const openHandler = wsAddEventListener.mock.calls.find(
+      c => c[0] === 'open',
+    )?.[1]
     if (openHandler) openHandler()
 
     // Wait for message to be sent
     await Bun.sleep(50)
 
-    expect(wsAddEventListener).toHaveBeenCalledWith('open', expect.any(Function))
-    expect(wsAddEventListener).toHaveBeenCalledWith('message', expect.any(Function))
-    expect(wsAddEventListener).toHaveBeenCalledWith('close', expect.any(Function))
-    expect(wsAddEventListener).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(wsAddEventListener).toHaveBeenCalledWith(
+      'open',
+      expect.any(Function),
+    )
+    expect(wsAddEventListener).toHaveBeenCalledWith(
+      'message',
+      expect.any(Function),
+    )
+    expect(wsAddEventListener).toHaveBeenCalledWith(
+      'close',
+      expect.any(Function),
+    )
+    expect(wsAddEventListener).toHaveBeenCalledWith(
+      'error',
+      expect.any(Function),
+    )
 
     // Should have sent a user message over WebSocket
     expect(wsSend).toHaveBeenCalledTimes(1)
@@ -66,7 +83,10 @@ describe('runConnectHeadless', () => {
       send = mock()
       close = mock()
       addEventListener = (ev: string, fn: Function) => wsHandlers.set(ev, fn)
-      constructor(public url: string | URL, public protocols?: string | string[]) {}
+      constructor(
+        public url: string | URL,
+        public protocols?: string | string[],
+      ) {}
     } as unknown as typeof WebSocket
 
     const config = {
@@ -85,7 +105,10 @@ describe('runConnectHeadless', () => {
     const msgHandler = wsHandlers.get('message')
     const resultMsg = JSON.stringify({
       type: 'result',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Hello back' }] },
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Hello back' }],
+      },
       uuid: '1234',
       session_id: 'test-session',
     })
@@ -95,7 +118,10 @@ describe('runConnectHeadless', () => {
     // Send a final result to stop
     const finalMsg = JSON.stringify({
       type: 'result',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Final' }] },
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Final' }],
+      },
       is_error: false,
       uuid: '5678',
       session_id: 'test-session',
@@ -119,7 +145,10 @@ describe('runConnectHeadless', () => {
       send = wsSend
       close = mock()
       addEventListener = (ev: string, fn: Function) => wsHandlers.set(ev, fn)
-      constructor(public url: string | URL, public protocols?: string | string[]) {}
+      constructor(
+        public url: string | URL,
+        public protocols?: string | string[],
+      ) {}
     } as unknown as typeof WebSocket
 
     const config = {
@@ -135,18 +164,22 @@ describe('runConnectHeadless', () => {
     // Send an unsupported control request
     const msgHandler = wsHandlers.get('message')
     msgHandler?.({
-      data: JSON.stringify({
-        type: 'control_request',
-        request_id: 'req-1',
-        request: { subtype: 'unknown_type' },
-      }) + '\n',
+      data:
+        JSON.stringify({
+          type: 'control_request',
+          request_id: 'req-1',
+          request: { subtype: 'unknown_type' },
+        }) + '\n',
     })
     await Bun.sleep(20)
 
     // Should send an error response
     const errorResponse = wsSend.mock.calls.find(c => {
       const parsed = JSON.parse(c[0])
-      return parsed.type === 'control_response' && parsed.response.subtype === 'error'
+      return (
+        parsed.type === 'control_response' &&
+        parsed.response.subtype === 'error'
+      )
     })
     expect(errorResponse).toBeDefined()
 
@@ -163,7 +196,10 @@ describe('runConnectHeadless', () => {
       send = wsSend
       close = mock()
       addEventListener = (ev: string, fn: Function) => wsHandlers.set(ev, fn)
-      constructor(public url: string | URL, public protocols?: string | string[]) {}
+      constructor(
+        public url: string | URL,
+        public protocols?: string | string[],
+      ) {}
     } as unknown as typeof WebSocket
 
     const config = {
@@ -179,17 +215,18 @@ describe('runConnectHeadless', () => {
     // Send a permission request for can_use_tool
     const msgHandler = wsHandlers.get('message')
     msgHandler?.({
-      data: JSON.stringify({
-        type: 'control_request',
-        request_id: 'perm-1',
-        request: {
-          subtype: 'can_use_tool',
-          tool_use_id: 'tool-1',
-          tool_name: 'Bash',
-          tool_input: { command: 'ls' },
-          tool_display_name: 'Bash',
-        },
-      }) + '\n',
+      data:
+        JSON.stringify({
+          type: 'control_request',
+          request_id: 'perm-1',
+          request: {
+            subtype: 'can_use_tool',
+            tool_use_id: 'tool-1',
+            tool_name: 'Bash',
+            tool_input: { command: 'ls' },
+            tool_display_name: 'Bash',
+          },
+        }) + '\n',
     })
     await Bun.sleep(20)
 
@@ -215,6 +252,8 @@ describe('runConnectHeadless', () => {
       wsUrl: '', // empty wsUrl should fail
     }
 
-    await expect(runConnectHeadless(config, '', 'json', false)).rejects.toThrow()
+    await expect(
+      runConnectHeadless(config, '', 'json', false),
+    ).rejects.toThrow()
   })
 })

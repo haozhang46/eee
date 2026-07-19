@@ -4,7 +4,10 @@ import { formatToolResult } from '../formatToolResult'
 describe('formatToolResult', () => {
   test('uses mapToolResultToToolResultBlockParam when available', () => {
     const tool = {
-      mapToolResultToToolResultBlockParam(data: { stdout: string }, id: string) {
+      mapToolResultToToolResultBlockParam(
+        data: { stdout: string },
+        id: string,
+      ) {
         return {
           tool_use_id: id,
           type: 'tool_result' as const,

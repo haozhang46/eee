@@ -448,6 +448,9 @@ const LOCAL_GATE_DEFAULTS: Record<string, unknown> = {
   // ── P1: API-dependent features ───────────────────────────────────
   tengu_session_memory: true, // Session memory (cross-session persistence)
   tengu_passport_quail: true, // Auto memory extraction
+  // Non-interactive (-p / SDK / harness stdio) extractMemories gate.
+  // Without this, isExtractModeActive() stays false when isInteractive=false.
+  tengu_slate_thimble: true,
   tengu_moth_copse: true, // Skip memory index, use prefetched memories
   tengu_coral_fern: true, // "Searching past context" section
   tengu_chomp_inflection: true, // Prompt suggestions

@@ -4,6 +4,7 @@
  *
  * SlotEvent shapes duplicated locally (do not import @harness/slot).
  */
+import { feature } from 'bun:bundle'
 import { join } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import {
@@ -11,8 +12,36 @@ import {
   type SlotEvent,
   type ToolCallEvent,
 } from './mapSdkToSlot.js'
+import { applyHarnessMemoryForCcb } from './harnessMemory.js'
 
 export type { SlotEvent, ToolCallEvent }
+
+/** CLI calls this via startBackgroundHousekeeping; harness ask() path must too. */
+let extractMemoriesInited = false
+
+async function ensureExtractMemoriesInit(
+  workspaceRoot: string,
+): Promise<void> {
+  if (feature('EXTRACT_MEMORIES')) {
+    if (extractMemoriesInited) return
+    extractMemoriesInited = true
+    const { initExtractMemories } = await import(
+      '../services/extractMemories/extractMemories.js'
+    )
+    initExtractMemories()
+    runnerLog(workspaceRoot, 'extractMemories', 'initExtractMemories()')
+  }
+}
+
+async function drainExtractMemories(): Promise<void> {
+  if (feature('EXTRACT_MEMORIES')) {
+    const { drainPendingExtraction } = await import(
+      '../services/extractMemories/extractMemories.js'
+    )
+    // Fire-and-forget from stopHooks; wait so writes land before the turn settles.
+    await drainPendingExtraction(60_000)
+  }
+}
 
 interface LLMSettings {
   provider: string
@@ -156,6 +185,9 @@ export async function* runCCBAgent(
   }
   resetSettingsCache()
   applySafeConfigEnvironmentVariables()
+  const { memDir, synced } = await applyHarnessMemoryForCcb(workspaceRoot)
+  runnerLog(workspaceRoot, 'memory', { memDir, synced })
+  await ensureExtractMemoriesInit(workspaceRoot)
 
   const permissionContext = getEmptyToolPermissionContext()
   const tools = getTools(permissionContext)
@@ -248,6 +280,14 @@ export async function* runCCBAgent(
     yield { type: 'error', message }
     yield { type: 'done', messageId: crypto.randomUUID() }
     return
+  } finally {
+    if (!signal.aborted) {
+      try {
+        await drainExtractMemories()
+      } catch {
+        // best-effort — extraction must not fail the turn
+      }
+    }
   }
 
   if (signal.aborted) {

@@ -5,7 +5,7 @@
  * SlotEvent shapes duplicated locally (do not import @harness/slot).
  */
 import { join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import {
   createSdkToSlotMapper,
   type SlotEvent,
@@ -19,6 +19,20 @@ interface LLMSettings {
   model: string
   baseUrl: string
   apiKey: string
+}
+
+/** Debug log to workspace `.harness/runner.log` (stdout is JSONL — do not console.log). */
+function runnerLog(workspaceRoot: string, ...args: unknown[]): void {
+  try {
+    const dir = join(workspaceRoot, '.harness')
+    mkdirSync(dir, { recursive: true })
+    const line = `[${new Date().toISOString()}] ${args
+      .map(a => (typeof a === 'string' ? a : JSON.stringify(a)))
+      .join(' ')}\n`
+    appendFileSync(join(dir, 'runner.log'), line)
+  } catch {
+    // best-effort
+  }
 }
 
 function loadLLM(cwd: string): LLMSettings {
@@ -85,6 +99,12 @@ export async function* runCCBAgent(
   signal: AbortSignal,
 ): AsyncGenerator<SlotEvent> {
   const llm = loadLLM(workspaceRoot)
+  runnerLog(workspaceRoot, 'llm', {
+    provider: llm.provider,
+    model: llm.model,
+    baseUrl: llm.baseUrl,
+    hasApiKey: Boolean(llm.apiKey),
+  })
   if (!llm.apiKey) {
     yield {
       type: 'text-delta',

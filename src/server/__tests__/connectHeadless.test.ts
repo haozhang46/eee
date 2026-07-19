@@ -59,6 +59,7 @@ describe('runConnectHeadless', () => {
       return true
     }) as typeof process.stdout.write
 
+    const origWs = globalThis.WebSocket
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
       readyState = WebSocket.OPEN
@@ -105,11 +106,12 @@ describe('runConnectHeadless', () => {
     expect(capturedStdout.length).toBeGreaterThan(0)
 
     process.stdout.write = origWrite
-    globalThis.WebSocket = WebSocket
+    globalThis.WebSocket = origWs
     await promise.catch(() => {}) // ignore shutdown errors
   })
 
   test('sends error response for unsupported control request types', async () => {
+    const origWs = globalThis.WebSocket
     const wsSend = mock()
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
@@ -148,11 +150,12 @@ describe('runConnectHeadless', () => {
     })
     expect(errorResponse).toBeDefined()
 
-    globalThis.WebSocket = WebSocket
+    globalThis.WebSocket = origWs
     await promise.catch(() => {})
   })
 
   test('handles permission requests in headless mode', async () => {
+    const origWs = globalThis.WebSocket
     const wsSend = mock()
     const wsHandlers = new Map<string, Function>()
     globalThis.WebSocket = class MockWebSocket {
@@ -201,7 +204,7 @@ describe('runConnectHeadless', () => {
     })
     expect(allowResponse).toBeDefined()
 
-    globalThis.WebSocket = WebSocket
+    globalThis.WebSocket = origWs
     await promise.catch(() => {})
   })
 

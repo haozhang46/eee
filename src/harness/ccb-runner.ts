@@ -97,6 +97,10 @@ export function linkAbortSignal(
 }
 
 async function applyLlmEnv(llm: LLMSettings): Promise<void> {
+  // Harness owns inference routing for Chat; block ~/.claude/settings.json
+  // from clobbering provider/base URL/model (e.g. user DeepSeek defaults).
+  process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST = '1'
+
   // Clear OpenAI-compat flags first so Cloud↔Ollama switches don't leak.
   delete process.env.CLAUDE_CODE_USE_OPENAI
   delete process.env.OPENAI_MODEL
@@ -108,6 +112,15 @@ async function applyLlmEnv(llm: LLMSettings): Promise<void> {
     process.env.OPENAI_MODEL = llm.model
     process.env.OPENAI_BASE_URL = llm.baseUrl
     process.env.OPENAI_API_KEY = llm.apiKey
+  } else if (llm.provider === 'anthropic') {
+    process.env.ANTHROPIC_API_KEY = llm.apiKey
+    process.env.ANTHROPIC_AUTH_TOKEN = llm.apiKey
+    process.env.ANTHROPIC_BASE_URL = llm.baseUrl
+    process.env.ANTHROPIC_MODEL = llm.model
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = llm.model
+    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = llm.model
+    process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = llm.model
+    process.env.CLAUDE_CODE_SUBAGENT_MODEL = llm.model
   }
 
   try {
@@ -181,6 +194,9 @@ export async function* runCCBAgent(
   }
   resetSettingsCache()
   applySafeConfigEnvironmentVariables()
+  // Re-apply after settings merge — user ~/.claude/settings.json otherwise
+  // overwrites harness llm.json (e.g. DeepSeek ANTHROPIC_BASE_URL).
+  await applyLlmEnv(llm)
   const { memDir, synced } = await applyHarnessMemoryForCcb(workspaceRoot)
   runnerLog(workspaceRoot, 'memory', { memDir, synced })
   await ensureExtractMemoriesInit(workspaceRoot)
